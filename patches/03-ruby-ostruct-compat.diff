@@ -1,0 +1,199 @@
+# Project: arkcompiler_ets_frontend
+diff --git a/ts2panda/scripts/gen_diagnostic.rb b/ts2panda/scripts/gen_diagnostic.rb
+index 566ca863d..f6efb5f66 100755
+--- a/ts2panda/scripts/gen_diagnostic.rb
++++ b/ts2panda/scripts/gen_diagnostic.rb
+@@ -1,4 +1,5 @@
+ #!/usr/bin/env ruby
++require 'ostruct'
+ # Copyright (c) 2021 Huawei Device Co., Ltd.
+ # Licensed under the Apache License, Version 2.0 (the "License");
+ # you may not use this file except in compliance with the License.
+
+# Project: arkcompiler_runtime_core
+diff --git a/assembler/asm_isapi.rb b/assembler/asm_isapi.rb
+index bdb77e00f7..587586288f 100644
+--- a/assembler/asm_isapi.rb
++++ b/assembler/asm_isapi.rb
+@@ -1,4 +1,5 @@
+ # Copyright (c) 2021-2022 Huawei Device Co., Ltd.
++require 'ostruct'
+ # Licensed under the Apache License, Version 2.0 (the "License");
+ # you may not use this file except in compliance with the License.
+ # You may obtain a copy of the License at
+diff --git a/isa/gen.rb b/isa/gen.rb
+index b3e46046b0..d5c95a8099 100755
+--- a/isa/gen.rb
++++ b/isa/gen.rb
+@@ -18,6 +18,7 @@ require 'optparse'
+ require 'yaml'
+ require 'json'
+ require 'erb'
++require 'ostruct'
+ 
+ # Extend Module to implement a decorator for ISAPI methods
+ class Module
+diff --git a/static_core/assembler/asm_isapi.rb b/static_core/assembler/asm_isapi.rb
+index 2650c75f21..fa6a85bc9d 100755
+--- a/static_core/assembler/asm_isapi.rb
++++ b/static_core/assembler/asm_isapi.rb
+@@ -1,4 +1,5 @@
+ # Copyright (c) 2021-2023 Huawei Device Co., Ltd.
++require 'ostruct'
+ # Licensed under the Apache License, Version 2.0 (the "License");
+ # you may not use this file except in compliance with the License.
+ # You may obtain a copy of the License at
+diff --git a/static_core/irtoc/lang/cpp_function.rb b/static_core/irtoc/lang/cpp_function.rb
+index f8fe60b503..a042f0a196 100755
+--- a/static_core/irtoc/lang/cpp_function.rb
++++ b/static_core/irtoc/lang/cpp_function.rb
+@@ -1,4 +1,5 @@
+ #!/usr/bin/env ruby
++require 'ostruct'
+ 
+ # Copyright (c) 2021-2022 Huawei Device Co., Ltd.
+ # Licensed under the Apache License, Version 2.0 (the "License");
+diff --git a/static_core/irtoc/lang/instruction.rb b/static_core/irtoc/lang/instruction.rb
+index 6009196d18..418ad1d149 100755
+--- a/static_core/irtoc/lang/instruction.rb
++++ b/static_core/irtoc/lang/instruction.rb
+@@ -1,4 +1,6 @@
+ #!/usr/bin/env ruby
++require 'ostruct'
++require 'stringio'
+ 
+ # Copyright (c) 2021-2022 Huawei Device Co., Ltd.
+ # Licensed under the Apache License, Version 2.0 (the "License");
+diff --git a/static_core/irtoc/lang/isa.rb b/static_core/irtoc/lang/isa.rb
+index 802453aa9e..2f8e2c581d 100755
+--- a/static_core/irtoc/lang/isa.rb
++++ b/static_core/irtoc/lang/isa.rb
+@@ -1,4 +1,7 @@
+ #!/usr/bin/env ruby
++require 'yaml'
++require 'json'
++require 'ostruct'
+ 
+ # Copyright (c) 2021-2022 Huawei Device Co., Ltd.
+ # Licensed under the Apache License, Version 2.0 (the "License");
+@@ -13,8 +16,6 @@
+ # See the License for the specific language governing permissions and
+ # limitations under the License.
+ 
+-require 'yaml'
+-require 'json'
+ 
+ module Gen; end
+ 
+diff --git a/static_core/irtoc/lang/options.rb b/static_core/irtoc/lang/options.rb
+index a38015f235..d9197c38cf 100755
+--- a/static_core/irtoc/lang/options.rb
++++ b/static_core/irtoc/lang/options.rb
+@@ -38,7 +38,7 @@ class << Options
+     end.parse!
+ 
+     if Options.working_dir
+-      Dir.mkdir(Options.working_dir) unless File.exists?(Options.working_dir)
++      Dir.mkdir(Options.working_dir) unless File.exist?(Options.working_dir)
+       Dir.chdir(Options.working_dir)
+     end
+ 
+diff --git a/static_core/isa/gen.rb b/static_core/isa/gen.rb
+index 2af1433b5b..ba4a4203eb 100755
+--- a/static_core/isa/gen.rb
++++ b/static_core/isa/gen.rb
+@@ -18,6 +18,7 @@ require 'optparse'
+ require 'yaml'
+ require 'json'
+ require 'erb'
++require 'ostruct'
+ 
+ # Extend Module to implement a decorator for ISAPI methods
+ class Module
+diff --git a/static_core/libllvmbackend/templates/pipeline.rb b/static_core/libllvmbackend/templates/pipeline.rb
+index 7c5ae8254c..95c876e98d 100644
+--- a/static_core/libllvmbackend/templates/pipeline.rb
++++ b/static_core/libllvmbackend/templates/pipeline.rb
+@@ -1,4 +1,5 @@
+ #!/usr/bin/env ruby
++require 'ostruct'
+ # Copyright (c) 2023 Huawei Device Co., Ltd.
+ # Licensed under the Apache License, Version 2.0 (the "License");
+ # you may not use this file except in compliance with the License.
+diff --git a/static_core/runtime/templates/gen_intrinsics_data.rb b/static_core/runtime/templates/gen_intrinsics_data.rb
+index 258aefec8e..3c0e7fc378 100755
+--- a/static_core/runtime/templates/gen_intrinsics_data.rb
++++ b/static_core/runtime/templates/gen_intrinsics_data.rb
+@@ -1,4 +1,5 @@
+ #!/usr/bin/env ruby
++require 'ostruct'
+ # Copyright (c) 2021-2022 Huawei Device Co., Ltd.
+ # Licensed under the Apache License, Version 2.0 (the "License");
+ # you may not use this file except in compliance with the License.
+diff --git a/static_core/templates/merge.rb b/static_core/templates/merge.rb
+index e0c66f083c..6a72dc53a3 100755
+--- a/static_core/templates/merge.rb
++++ b/static_core/templates/merge.rb
+@@ -1,4 +1,5 @@
+ #!/usr/bin/env ruby
++require 'ostruct'
+ # Copyright (c) 2022-2022 Huawei Device Co., Ltd.
+ # Licensed under the Apache License, Version 2.0 (the "License");
+ # you may not use this file except in compliance with the License.
+diff --git a/static_core/tests/checked/checker.rb b/static_core/tests/checked/checker.rb
+index 4c7be02fd0..967139e313 100755
+--- a/static_core/tests/checked/checker.rb
++++ b/static_core/tests/checked/checker.rb
+@@ -176,7 +176,7 @@ class Checker
+     # Current search scope
+     @disasm_scope = nil
+ 
+-    Dir.mkdir(@cwd) unless File.exists?(@cwd)
++    Dir.mkdir(@cwd) unless File.exist?(@cwd)
+     clear_data
+   end
+ 
+diff --git a/static_core/tests/checked/checker_tests.rb b/static_core/tests/checked/checker_tests.rb
+index 5f2f51353d..c13c3ca3c5 100755
+--- a/static_core/tests/checked/checker_tests.rb
++++ b/static_core/tests/checked/checker_tests.rb
+@@ -1,4 +1,5 @@
+ # Copyright (c) 2021-2022 Huawei Device Co., Ltd.
++require 'ostruct'
+ # Licensed under the Apache License, Version 2.0 (the "License");
+ # you may not use this file except in compliance with the License.
+ # You may obtain a copy of the License at
+diff --git a/templates/merge.rb b/templates/merge.rb
+index e0c66f083c..6a72dc53a3 100755
+--- a/templates/merge.rb
++++ b/templates/merge.rb
+@@ -1,4 +1,5 @@
+ #!/usr/bin/env ruby
++require 'ostruct'
+ # Copyright (c) 2022-2022 Huawei Device Co., Ltd.
+ # Licensed under the Apache License, Version 2.0 (the "License");
+ # you may not use this file except in compliance with the License.
+diff --git a/tests/checked/checker.rb b/tests/checked/checker.rb
+index 094b5c3814..069e54154d 100755
+--- a/tests/checked/checker.rb
++++ b/tests/checked/checker.rb
+@@ -151,7 +151,7 @@ class Checker
+     # Current search scope
+     @disasm_scope = nil
+ 
+-    Dir.mkdir(@cwd) unless File.exists?(@cwd)
++    Dir.mkdir(@cwd) unless File.exist?(@cwd)
+     clear_data
+   end
+ 
+diff --git a/tests/checked/checker_tests.rb b/tests/checked/checker_tests.rb
+index 5f2f51353d..c13c3ca3c5 100644
+--- a/tests/checked/checker_tests.rb
++++ b/tests/checked/checker_tests.rb
+@@ -1,4 +1,5 @@
+ # Copyright (c) 2021-2022 Huawei Device Co., Ltd.
++require 'ostruct'
+ # Licensed under the Apache License, Version 2.0 (the "License");
+ # you may not use this file except in compliance with the License.
+ # You may obtain a copy of the License at
+
