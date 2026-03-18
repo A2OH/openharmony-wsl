@@ -1,0 +1,83 @@
+# Project: account_os_account (base/account/os_account)
+diff --git a/os_account.gni b/os_account.gni
+index 096964c7..a585d450 100644
+--- a/os_account.gni
++++ b/os_account.gni
+@@ -57,14 +57,9 @@ account_coverage_config_path = "${os_account_path}/config"
+ 
+ fuzz_output_path = "os_account/os_account"
+ 
+-if (!defined(global_parts_info) ||
+-    defined(global_parts_info.useriam_user_auth_framework)) {
+-  has_user_auth_part = true
+-  has_user_idm_part = true
+-} else {
+-  has_user_auth_part = false
+-  has_user_idm_part = false
+-}
++# Force user_auth_part enabled - headers are always needed
++has_user_auth_part = true
++has_user_idm_part = true
+ 
+ if (!defined(global_parts_info) ||
+     defined(global_parts_info.useriam_pin_auth)) {
+diff --git a/services/accountmgr/BUILD.gn b/services/accountmgr/BUILD.gn
+index 0724e229..5c049fdd 100644
+--- a/services/accountmgr/BUILD.gn
++++ b/services/accountmgr/BUILD.gn
+@@ -69,6 +69,7 @@ config("ability_manager_config") {
+     "${ability_runtime_path}/ability_base/interfaces/inner_api/want/include",
+     "${ability_runtime_path}/services/abilitymgr/include",
+     "${ability_runtime_path}/services/common/include",
++    "//foundation/ability/ability_base/interfaces/kits/native/session_info/include",
+   ]
+ }
+ 
+
+# Project: msdp_device_status (base/msdp/device_status)
+diff --git a/services/interaction/drag/BUILD.gn b/services/interaction/drag/BUILD.gn
+index 1b2c89712..3a83a525c 100644
+--- a/services/interaction/drag/BUILD.gn
++++ b/services/interaction/drag/BUILD.gn
+@@ -80,6 +80,7 @@ ohos_shared_library("interaction_drag") {
+     "eventhandler:libeventhandler",
+     "graphic_2d:libcomposer",
+     "graphic_2d:librender_service_base",
++    "graphic_2d:librender_service_client",
+     "graphic_2d:window_animation",
+     "hilog:libhilog",
+     "hisysevent:libhisysevent",
+
+# Project: third_party_selinux (third_party/selinux)
+diff --git a/BUILD.gn b/BUILD.gn
+index 250dc0a9..97cf9336 100644
+--- a/BUILD.gn
++++ b/BUILD.gn
+@@ -47,7 +47,7 @@ ohos_shared_library("libsepol") {
+   ]
+   result = exec_script(md5_check_script, _arguments, "string")
+   if (result != "") {
+-    exec_script("/usr/bin/flex",
++    exec_script("/home/dspfac/miniconda3/bin/flex",
+                 [
+                   "-o",
+                   rebase_path("libsepol/cil/src/cil_lexer.c"),
+@@ -394,7 +394,7 @@ ohos_executable("checkpolicy") {
+   ]
+   result = exec_script(md5_check_script, _arguments, "string")
+   if (result != "") {
+-    exec_script("/usr/bin/bison",
++    exec_script("/home/dspfac/miniconda3/bin/bison",
+                 [
+                   "-y",
+                   "-d",
+@@ -412,7 +412,7 @@ ohos_executable("checkpolicy") {
+   ]
+   result = exec_script(md5_check_script, _arguments, "string")
+   if (result != "") {
+-    exec_script("/usr/bin/flex",
++    exec_script("/home/dspfac/miniconda3/bin/flex",
+                 [
+                   "-o",
+                   rebase_path("checkpolicy/policy_scan.c"),
+
