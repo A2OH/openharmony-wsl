@@ -1,0 +1,24 @@
+--- a/kernel/linux/linux-5.10/drivers/gpu/drm/virtio/virtgpu_kms.c
++++ b/kernel/linux/linux-5.10/drivers/gpu/drm/virtio/virtgpu_kms.c
+@@ -107,8 +107,9 @@ int virtio_gpu_init(struct drm_device *dev)
+ 	int ret = 0;
+ 
+ 	if (!virtio_has_feature(dev_to_virtio(dev->dev), VIRTIO_F_VERSION_1))
+-		return -ENODEV;
+-
++		DRM_WARN("virtio-gpu: VIRTIO_F_VERSION_1 not supported, continuing anyway\n");
++	DRM_INFO("virtio-gpu: init starting\n");
++
+ 	vgdev = kzalloc(sizeof(struct virtio_gpu_device), GFP_KERNEL);
+ 	if (!vgdev)
+ 		return -ENOMEM;
+@@ -239,6 +240,9 @@ void virtio_gpu_release(struct drm_device *dev)
+ {
+ 	struct virtio_gpu_device *vgdev = dev->dev_private;
+ 
++	if (!vgdev)
++		return;
++
+ 	virtio_gpu_modeset_fini(vgdev);
+ 	virtio_gpu_free_vbufs(vgdev);
+ 	virtio_gpu_cleanup_cap_cache(vgdev);
