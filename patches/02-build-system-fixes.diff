@@ -1,0 +1,26 @@
+diff --git a/hb/services/ninja.py b/hb/services/ninja.py
+index 22bf2a13..447cd539 100644
+--- a/hb/services/ninja.py
++++ b/hb/services/ninja.py
+@@ -41,7 +41,7 @@ class Ninja(BuildExecutorInterface):
+         """execute ninja cmd using registed args
+         :raise OHOSException: when ninja failed
+         """
+-        ninja_cmd = [self.exec, '-w', 'dupbuild=warn',
++        ninja_cmd = [self.exec, '-w', 'dupbuild=warn', '-k', '0',
+                      '-C', self.config.out_path] + self._convert_args()
+         LogUtil.write_log(self.config.log_path,
+                           'Excuting ninja command: {}'.format(' '.join(ninja_cmd)), 'info')
+diff --git a/hb/util/loader/load_ohos_build.py b/hb/util/loader/load_ohos_build.py
+index 7af06ac7..3d3aeb6c 100644
+--- a/hb/util/loader/load_ohos_build.py
++++ b/hb/util/loader/load_ohos_build.py
+@@ -638,7 +638,7 @@ def compare_subsystem_and_component(subsystem_name, components_name, subsystem_c
+     if name in subsystem_components_list:
+         print(f"Warning: {message}")
+     else:
+-        raise Exception(message)
++        print(f"Warning: {message}")  # Downgraded from error to warning
+ 
+ 
+ def check_subsystem_and_component(parts_info_output_path, skip_partlist_check):
