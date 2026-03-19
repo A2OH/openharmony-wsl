@@ -58,7 +58,7 @@ $QEMU -M virt -cpu cortex-a7 -smp 1 -m 1024 -display vnc=:0 -device virtio-gpu-d
 
 ### Building Dalvik VM (ARM32)
 ```bash
-cd /home/dspfac/android-to-openharmony-migration/dalvik-port
+cd /home/dspfac/android-to-openharmony-migration/dalvik-port  # repo: A2OH/westlake
 make TARGET=ohos-arm32 -j$(nproc)
 # Output: build-ohos-arm32/dalvikvm (7.2MB static ARM32)
 ```
@@ -95,7 +95,7 @@ base64 -d /data/file.b64 > /data/file
 | Path | Description |
 |------|-------------|
 | `/home/dspfac/openharmony` | OHOS source tree |
-| `/home/dspfac/android-to-openharmony-migration` | Westlake repo (dalvik-port, shim, test-apps) |
+| `/home/dspfac/android-to-openharmony-migration` | Westlake repo — `A2OH/westlake` (dalvik-port, shim, test-apps) |
 | `/home/dspfac/dalvik-kitkat` | Dalvik VM source |
 | `/home/dspfac/openharmony-wsl` | This repo |
 | `/tmp/qemu-8.2.2/build/qemu-system-arm` | Source-built QEMU with virtio-gpu |
@@ -127,3 +127,5 @@ base64 -d /data/file.b64 > /data/file
 - **dalvikvm "Non-absolute bootclasspath"**: Use full paths `/data/a2oh/core.jar`
 - **DEX class not found**: Must be on both `-Xbootclasspath` and `-classpath`
 - **Lambdas in shim code**: Use `dx` (not `d8`) with `--no-optimize` for DEX 035
+- **Dalvik ExceptionInInitializerError on QEMU**: Ramdisk needs `/etc/passwd` (e.g. `root:x:0:0:root:/data:/bin/sh`) for `System.initSystemProperties`
+- **Dalvik output file empty**: Use file-based I/O (not pipes), redirect stderr to `/dev/null` to avoid buffer deadlock

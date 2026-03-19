@@ -45,6 +45,24 @@ emulation with full system service support.
 | System abilities | SA 180, 401, 501 (ability, bundle, app manager) |
 | Source patches | ~809 files across 157 projects (provided as diffs) |
 | Boot stability | Stable, no crashes, clean shutdown |
+| VNC display | Real pixel output via virtio-gpu + fbdev emulation |
+| Android APK support | Dalvik VM + 2,056 shim classes running on ARM32 QEMU |
+
+## Related Repositories
+
+| Repository | Description |
+|------------|-------------|
+| [A2OH/openharmony-wsl](https://github.com/A2OH/openharmony-wsl) | This repo — OHOS build scripts, kernel patches, QEMU tools |
+| [A2OH/westlake](https://github.com/A2OH/westlake) | Android shim layer (2,056 classes), Dalvik port, test apps |
+| [A2OH/dalvik-universal](https://github.com/A2OH/dalvik-universal) | KitKat Dalvik VM 64-bit port source |
+
+### External Dependencies
+
+| Source | URL | Size | Purpose |
+|--------|-----|------|---------|
+| OpenHarmony | `https://gitee.com/openharmony/manifest.git` | ~80 GB | OS source tree |
+| QEMU 8.2.2 | `https://download.qemu.org/qemu-8.2.2.tar.xz` | ~130 MB | ARM emulator (VNC/GPU) |
+| AOSP Android 11 | `https://android.googlesource.com/platform/manifest` | ~100 GB | Framework source for shim layer (optional) |
 
 ## Quick Start
 
@@ -75,19 +93,42 @@ OHOS_ROOT=~/openharmony ./scripts/prepare_images.sh
 OHOS_ROOT=~/openharmony ./scripts/qemu_boot.sh 0
 ```
 
+### Optional: Android APK Support
+
+To run Android APKs on OHOS via Dalvik VM (see [docs/ANDROID.md](docs/ANDROID.md)):
+
+```bash
+# Clone A2OH satellite repos
+git clone https://github.com/A2OH/westlake.git ~/westlake
+git clone https://github.com/A2OH/dalvik-universal.git ~/dalvik-universal
+
+# Build Dalvik VM for ARM32
+cd ~/westlake/dalvik-port
+make TARGET=ohos-arm32 -j$(nproc)
+
+# Deploy to QEMU and run (see docs/ANDROID.md for full instructions)
+```
+
 ## Repository Structure
 
 ```
 openharmony-wsl/
 +-- README.md                       <- This file (English)
 +-- README_CN.md                    <- Chinese version
++-- CLAUDE.md                       <- Agent instructions for Claude Code
 +-- LICENSE                         <- Apache 2.0
 +-- scripts/
 |   +-- prepare_images.sh           <- Generate ext4 images from build output
 |   +-- qemu_boot.sh                <- Boot QEMU headless (serial console)
 |   +-- qemu_boot_vnc.sh            <- Boot QEMU with VNC display
+|   +-- qemu_boot_vnc_gpu.sh        <- Boot QEMU with virtio-gpu + VNC
 |   +-- inject_files.sh             <- Inject files into ext4 images via debugfs
 |   +-- apply_patches.sh            <- Apply all patches to OHOS source tree
+|   +-- fb_init.c                   <- Framebuffer test (calculator UI on VNC)
+|   +-- apk_vnc_init.c              <- Dalvik + MockDonalds on VNC
+|   +-- real_apk_vnc.c              <- ViewDumper output rendered on VNC
+|   +-- dalvik_vnc_init.c           <- Dalvik ViewDumper on VNC
+|   +-- ViewDumper.java             <- Dumps Android View tree as RECT commands
 +-- patches/
 |   +-- README.md                   <- Patch descriptions and manual apply guide
 |   +-- 01-gn-defines-clobbering.diff   <- Fix defines= overwriting (639 files)
@@ -96,11 +137,14 @@ openharmony-wsl/
 |   +-- 04-cpp-header-fixes.diff        <- Missing #include, SUPPORT_GRAPHICS guards
 |   +-- 05-kernel-config.diff           <- Enable DRM_BOCHS for VNC
 |   +-- 06-gn-component-guards.diff     <- Conditional compilation fixes
+|   +-- 07-virtio-gpu-arm32-fix.diff    <- Kernel virtio-gpu NULL check + VERSION_1 skip
 +-- docs/
     +-- BUILD.md                    <- Full build instructions (English)
     +-- BUILD_CN.md                 <- Full build instructions (Chinese)
     +-- QEMU.md                     <- QEMU setup, options, troubleshooting (EN)
     +-- QEMU_CN.md                  <- QEMU setup (Chinese)
+    +-- VNC.md                      <- VNC display setup (virtio-gpu, kernel patches)
+    +-- ANDROID.md                  <- Android APK support (Dalvik, shim layer)
     +-- TROUBLESHOOTING.md          <- Common issues and fixes (English)
     +-- TROUBLESHOOTING_CN.md       <- Common issues and fixes (Chinese)
 ```
@@ -124,6 +168,8 @@ checkout. This approach:
 | [docs/BUILD_CN.md](docs/BUILD_CN.md) | CN | 从源码构建的详细步骤 |
 | [docs/QEMU.md](docs/QEMU.md) | EN | QEMU options, boot modes, file injection |
 | [docs/QEMU_CN.md](docs/QEMU_CN.md) | CN | QEMU 选项、启动模式、文件注入 |
+| [docs/VNC.md](docs/VNC.md) | EN | VNC display setup (virtio-gpu, kernel patches) |
+| [docs/ANDROID.md](docs/ANDROID.md) | EN | Android APK support (Dalvik VM, shim layer, VNC demo) |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | EN | Common issues and solutions |
 | [docs/TROUBLESHOOTING_CN.md](docs/TROUBLESHOOTING_CN.md) | CN | 常见问题和解决方案 |
 | [patches/README.md](patches/README.md) | EN | Patch descriptions and apply guide |
