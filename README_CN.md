@@ -1,3 +1,5 @@
+**[English](README.md)** | **[中文](README_CN.md)**
+
 # 在 WSL2 上运行 OpenHarmony（QEMU 模拟）
 
 [![Build](https://img.shields.io/badge/build-98%25_targets-brightgreen)]()
