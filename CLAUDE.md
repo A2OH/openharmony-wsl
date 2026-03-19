@@ -105,27 +105,43 @@ base64 -d /data/file.b64 > /data/file
 
 1. **Kernel: virtio-gpu ARM32 fix** (`patches/07-virtio-gpu-arm32-fix.diff`)
    - NULL check in `virtio_gpu_release`
-   - Skip `VIRTIO_F_VERSION_1` check
+   - Skip `VIRTIO_F_VERSION_1` check in virtgpu_kms.c
 
-2. **musl libc: dynlink.o TLS fix** (in `libc_static_fixed.a`)
+2. **Kernel: virtio-mmio VERSION_1 bypass** (`drivers/virtio/virtio_mmio.c`)
+   - Skip VERSION_1 rejection for v2 mmio devices
+   - Required for ALL virtio-mmio devices (gpu, input, etc.)
+
+3. **Kernel: virtio-input VERSION_1 bypass** (`drivers/virtio/virtio_input.c`)
+   - Skip VERSION_1 check in virtio-input probe
+   - Required for `-device virtio-tablet-device` (VNC touch input)
+
+4. **musl libc: dynlink.o TLS fix** (in `libc_static_fixed.a`)
    - Rename `__init_tls` and `__libc_start_init` in dynlink.o
    - Fixes static ARM32 binaries that link ArkUI
 
-3. **ArkUI: overlay_manager lazy init**
+5. **ArkUI: overlay_manager lazy init**
    - `RefPtr<Curve>` globals converted to function-local statics
    - Prevents crash in ARM32 static constructors
 
-4. **Dalvik: Inflater heap fix**
+6. **Dalvik: Inflater heap fix**
    - Store original malloc'd pointer in `z_stream.opaque`
    - Fixes SIGILL when loading compressed APK entries
+
+7. **Dalvik: Software Canvas renderer** (`dalvik-port/compat/arkui_bridge.cpp`)
+   - 70 OHBridge JNI methods: Bitmap, Canvas, Pen, Brush, Font, Path
+   - stb_truetype TTF text rendering with alpha blending
+   - Pixel buffer flushed to `/data/a2oh/canvas_pixels.raw`
+   - JNI registration via `dvmRegisterOHBridge` (static link requires explicit registration)
 
 ## Common Issues
 
 - **OHOS static binary crashes as PID 1**: Use GCC cross-compiler instead of OHOS Clang (preinit_stubs issue)
 - **virtio-gpu kernel oops**: Apply kernel patches, use `-smp 1`
 - **No /dev/fb0**: Need `CONFIG_DRM_VIRTIO_GPU=y` + `CONFIG_DRM_FBDEV_EMULATION=y` in kernel
+- **No touch input (only gpio-keys)**: Patch `virtio_input.c` and `virtio_mmio.c` VERSION_1 checks
 - **dalvikvm "Non-absolute bootclasspath"**: Use full paths `/data/a2oh/core.jar`
 - **DEX class not found**: Must be on both `-Xbootclasspath` and `-classpath`
 - **Lambdas in shim code**: Use `dx` (not `d8`) with `--no-optimize` for DEX 035
 - **Dalvik ExceptionInInitializerError on QEMU**: Ramdisk needs `/etc/passwd` (e.g. `root:x:0:0:root:/data:/bin/sh`) for `System.initSystemProperties`
 - **Dalvik output file empty**: Use file-based I/O (not pipes), redirect stderr to `/dev/null` to avoid buffer deadlock
+- **UnsatisfiedLinkError for OHBridge JNI**: Must use `--whole-archive` for libdvm.a + explicit `RegisterNatives` in `dvmRegisterOHBridge`

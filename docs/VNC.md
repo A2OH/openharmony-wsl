@@ -92,6 +92,37 @@ QEMU's `virtio-gpu-device` on the `virtio-mmio` bus uses legacy transport by def
 
 > **Why not use `force-legacy=false`?** Because `-global virtio-mmio.force-legacy=false` affects ALL virtio-mmio devices including virtio-blk, and the OHOS kernel's virtio-blk driver doesn't support non-legacy mode.
 
+### Patch 3: virtio-mmio transport VERSION_1 bypass
+
+**File:** `kernel/linux/linux-5.10/drivers/virtio/virtio_mmio.c`
+
+The virtio-mmio transport rejects all v2 devices that don't negotiate VERSION_1.
+This blocks virtio-gpu, virtio-input (tablet), and any future virtio-mmio devices.
+
+```diff
+ 	if (vm_dev->version == 2 &&
+ 			!__virtio_test_bit(vdev, VIRTIO_F_VERSION_1)) {
+-		dev_err(&vdev->dev, "New virtio-mmio devices (version 2) must provide VIRTIO_F_VERSION_1 feature!\n");
+-		return -EINVAL;
++		dev_warn(&vdev->dev, "virtio-mmio v2 without VERSION_1, continuing anyway\n");
+ 	}
+```
+
+### Patch 4: virtio-input VERSION_1 bypass (for touch input)
+
+**File:** `kernel/linux/linux-5.10/drivers/virtio/virtio_input.c`
+
+The virtio-input driver (used by `virtio-tablet-device`) also refuses to probe
+without VERSION_1. Same fix as virtio-gpu.
+
+```diff
+ 	if (!virtio_has_feature(vdev, VIRTIO_F_VERSION_1))
+-		return -ENODEV;
++		dev_warn(&vdev->dev, "virtio-input: VERSION_1 not set, continuing\n");
+```
+
+> **Note:** Patches 3 and 4 are required for touch input via `-device virtio-tablet-device`.
+
 ### Rebuild the kernel
 
 ```bash
@@ -240,10 +271,13 @@ $QEMU \
   -M virt -cpu cortex-a7 -smp 1 -m 1024 \
   -display vnc=:0 \
   -device virtio-gpu-device \
+  -device virtio-tablet-device \
   -kernel $IMAGES/zImage-dtb \
   -initrd ramdisk_vnc.img \
   -append "console=ttyAMA0 root=/dev/ram0 rw quiet loglevel=0"
 ```
+
+> **Note:** `-device virtio-tablet-device` enables touch/click input from VNC. Requires kernel patches 3+4 above.
 
 > **Note:** Use `-smp 1` (single core). Multi-core causes kernel SMP IPI issues with virtio-gpu.
 

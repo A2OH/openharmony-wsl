@@ -174,6 +174,7 @@ $QEMU \
   -M virt -cpu cortex-a7 -smp 1 -m 1024 \
   -display vnc=:0 \
   -device virtio-gpu-device \
+  -device virtio-tablet-device \
   -drive if=none,file=$IMAGES/userdata.img,format=raw,id=ud \
   -device virtio-blk-device,drive=ud \
   -kernel $IMAGES/zImage-dtb \
@@ -188,14 +189,37 @@ $QEMU \
 # macOS: open vnc://localhost:5900
 ```
 
+> **Note:** `-device virtio-tablet-device` enables touch/click input from VNC.
+> Requires kernel patches for `virtio_mmio.c` and `virtio_input.c` (see [VNC.md](VNC.md)).
+
 ## What You'll See
 
 The VNC display shows the Android View tree rendered from Dalvik:
 
-- Blue title bar: "MockDonalds - Android View Tree on OHOS ARM32 QEMU"
-- Menu items: Big Mock Burger ($5.99), Quarter Mocker ($4.99), etc.
+- Red title bar: "Android on OHOS" + "Android on OHOS ARM32 QEMU"
+- Menu items with TTF fonts: Big Mock Burger ($5.99), Quarter Mocker ($4.99), etc.
 - Green "View Cart" button
-- Footer with view count and output size
+- Numbered red circles for each item
+- Footer: "30 views | 8 items | TTF fonts | Touch enabled"
+- Click any item: highlights briefly, status bar shows "Tapped: <item name>"
+
+## Rendering Paths
+
+There are two rendering paths:
+
+### Path 1: RECT geometry (default)
+`ViewDumper.java` runs `view.measure()` + `view.layout()`, outputs RECT commands.
+The init binary parses RECTs and draws with stb_truetype TTF fonts to `/dev/fb0`.
+
+### Path 2: Canvas pixel rendering (software OH_Drawing)
+`CanvasViewDumper.java` calls `view.draw(canvas)` which invokes the real Android
+Canvas API. The Dalvik VM's OHBridge JNI routes Canvas calls to a software
+renderer (`software_canvas.h` + `stb_truetype.h`) that produces ARGB8888 pixels.
+The init binary blits the raw pixel buffer directly to `/dev/fb0`.
+
+Canvas operations implemented: drawRect, drawCircle, drawLine, drawText,
+drawRoundRect, drawOval, drawBitmap, drawPath, drawColor, save/restore,
+translate, scale, clipRect. 70 JNI methods total.
 
 ## ViewDumper Output Format
 
@@ -244,3 +268,7 @@ which appears on VNC.
 | Empty viewdump.txt | stderr floods output file | Redirect dalvikvm stderr to `/dev/null` |
 | Black VNC screen | Init crashed (musl issue) | Compile init with GCC, not OHOS Clang |
 | No `/dev/fb0` | Kernel DRM/fbdev not configured | See [VNC.md](VNC.md) for kernel patches |
+| `UnsatisfiedLinkError: bitmapCreate` | JNI symbols stripped from static binary | Use `--whole-archive` when linking libdvm.a + register via `dvmRegisterOHBridge` |
+| No touch device (only gpio-keys) | `virtio_input.c` rejects VERSION_1 | Patch kernel: see [VNC.md](VNC.md) patches 3+4 |
+| Click does nothing in VNC | virtio-mmio blocks v2 devices | Patch `virtio_mmio.c` VERSION_1 check |
+| Canvas pixels black except text | `View.draw()` text color defaults to black | Set background color in Activity or use RECT fallback path |
