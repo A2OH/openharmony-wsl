@@ -1,3 +1,5 @@
+**[English](README.md)** | **[中文](README_CN.md)**
+
 # OpenHarmony on WSL2 with QEMU
 
 [![Build](https://img.shields.io/badge/build-98%25_targets-brightgreen)]()
