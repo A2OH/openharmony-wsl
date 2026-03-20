@@ -44,6 +44,24 @@
 | 系统能力 | SA 180, 401, 501 (ability, bundle, app manager) |
 | 源码补丁 | ~809 个文件，涉及 157 个项目（以 diff 格式提供）|
 | 启动稳定性 | 稳定，无崩溃，可正常关机 |
+| VNC 显示 | 通过 virtio-gpu + fbdev 模拟实现真实像素输出 |
+| Android APK 支持 | Dalvik VM + 2,056 个 shim 类在 ARM32 QEMU 上运行 |
+
+## 相关仓库
+
+| 仓库 | 描述 |
+|------|------|
+| [A2OH/openharmony-wsl](https://github.com/A2OH/openharmony-wsl) | 本仓库 -- OHOS 构建脚本、内核补丁、QEMU 工具 |
+| [A2OH/westlake](https://github.com/A2OH/westlake) | Android 兼容层（2,056 个类）、Dalvik 移植、测试应用 |
+| [A2OH/dalvik-universal](https://github.com/A2OH/dalvik-universal) | KitKat Dalvik VM 64 位移植源码 |
+
+### 外部依赖
+
+| 来源 | 地址 | 大小 | 用途 |
+|------|------|------|------|
+| OpenHarmony | `https://gitee.com/openharmony/manifest.git` | ~80 GB | 操作系统源码树 |
+| QEMU 8.2.2 | `https://download.qemu.org/qemu-8.2.2.tar.xz` | ~130 MB | ARM 模拟器（VNC/GPU） |
+| AOSP Android 11 | `https://android.googlesource.com/platform/manifest` | ~100 GB | 兼容层所需的框架源码（可选） |
 
 ## 快速开始
 
@@ -74,19 +92,42 @@ OHOS_ROOT=~/openharmony ./scripts/prepare_images.sh
 OHOS_ROOT=~/openharmony ./scripts/qemu_boot.sh 0
 ```
 
+### 可选：Android APK 支持
+
+通过 Dalvik VM 在 OHOS 上运行 Android APK（详见 [docs/ANDROID.md](docs/ANDROID.md)）：
+
+```bash
+# 克隆 A2OH 卫星仓库
+git clone https://github.com/A2OH/westlake.git ~/westlake
+git clone https://github.com/A2OH/dalvik-universal.git ~/dalvik-universal
+
+# 为 ARM32 构建 Dalvik VM
+cd ~/westlake/dalvik-port
+make TARGET=ohos-arm32 -j$(nproc)
+
+# 部署到 QEMU 并运行（完整说明见 docs/ANDROID.md）
+```
+
 ## 仓库结构
 
 ```
 openharmony-wsl/
 +-- README.md                       <- English 版本
 +-- README_CN.md                    <- 本文件（中文）
++-- CLAUDE.md                       <- Claude Code 代理指令
 +-- LICENSE                         <- Apache 2.0
 +-- scripts/
 |   +-- prepare_images.sh           <- 从构建输出生成 ext4 镜像
 |   +-- qemu_boot.sh                <- 启动 QEMU 无显示模式（串口控制台）
 |   +-- qemu_boot_vnc.sh            <- 启动 QEMU VNC 显示模式
+|   +-- qemu_boot_vnc_gpu.sh        <- 启动 QEMU virtio-gpu + VNC 模式
 |   +-- inject_files.sh             <- 通过 debugfs 向 ext4 镜像注入文件
 |   +-- apply_patches.sh            <- 将所有补丁应用到 OHOS 源码树
+|   +-- fb_init.c                   <- 帧缓冲测试（VNC 上的计算器界面）
+|   +-- apk_vnc_init.c              <- Dalvik + MockDonalds VNC 演示
+|   +-- real_apk_vnc.c              <- ViewDumper 输出渲染到 VNC
+|   +-- dalvik_vnc_init.c           <- Dalvik ViewDumper VNC 演示
+|   +-- ViewDumper.java             <- 将 Android View 树导出为 RECT 命令
 +-- patches/
 |   +-- README.md                   <- 补丁说明及手动应用指南
 |   +-- 01-gn-defines-clobbering.diff   <- 修复 defines= 覆盖问题（639 个文件）
@@ -95,11 +136,14 @@ openharmony-wsl/
 |   +-- 04-cpp-header-fixes.diff        <- 缺少 #include，SUPPORT_GRAPHICS 保护
 |   +-- 05-kernel-config.diff           <- 启用 DRM_BOCHS 支持 VNC
 |   +-- 06-gn-component-guards.diff     <- 条件编译修复
+|   +-- 07-virtio-gpu-arm32-fix.diff    <- 内核 virtio-gpu NULL 检查 + VERSION_1 跳过
 +-- docs/
     +-- BUILD.md                    <- 完整构建说明（英文）
     +-- BUILD_CN.md                 <- 完整构建说明（中文）
     +-- QEMU.md                     <- QEMU 设置和选项（英文）
     +-- QEMU_CN.md                  <- QEMU 设置和选项（中文）
+    +-- VNC.md                      <- VNC 显示设置（virtio-gpu、内核补丁）
+    +-- ANDROID.md                  <- Android APK 支持（Dalvik VM、兼容层、VNC 演示）
     +-- TROUBLESHOOTING.md          <- 常见问题和修复（英文）
     +-- TROUBLESHOOTING_CN.md       <- 常见问题和修复（中文）
 ```
@@ -122,6 +166,8 @@ openharmony-wsl/
 | [docs/BUILD_CN.md](docs/BUILD_CN.md) | 中文 | 从源码构建的详细步骤 |
 | [docs/QEMU.md](docs/QEMU.md) | 英文 | QEMU 选项、启动模式、文件注入 |
 | [docs/QEMU_CN.md](docs/QEMU_CN.md) | 中文 | QEMU 选项、启动模式、文件注入 |
+| [docs/VNC.md](docs/VNC.md) | 英文 | VNC 显示设置（virtio-gpu、内核补丁） |
+| [docs/ANDROID.md](docs/ANDROID.md) | 英文 | Android APK 支持（Dalvik VM、兼容层、VNC 演示） |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | 英文 | 常见问题和解决方案 |
 | [docs/TROUBLESHOOTING_CN.md](docs/TROUBLESHOOTING_CN.md) | 中文 | 常见问题和解决方案 |
 | [patches/README.md](patches/README.md) | 英文 | 补丁说明及应用指南 |
