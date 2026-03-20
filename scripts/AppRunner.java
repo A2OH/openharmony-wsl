@@ -174,8 +174,7 @@ public class AppRunner {
 
     static void dispatchTouch(int action, float x, float y) {
         try {
-            long now = System.currentTimeMillis();
-            MotionEvent ev = MotionEvent.obtain(now, now, action, x, y, 0);
+            MotionEvent ev = MotionEvent.obtain(action, x, y, System.currentTimeMillis());
             rootView.dispatchTouchEvent(ev);
             out("TOUCH: action=" + action + " x=" + (int)x + " y=" + (int)y);
         } catch (Throwable t) {
