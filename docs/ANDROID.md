@@ -272,3 +272,42 @@ which appears on VNC.
 | No touch device (only gpio-keys) | `virtio_input.c` rejects VERSION_1 | Patch kernel: see [VNC.md](VNC.md) patches 3+4 |
 | Click does nothing in VNC | virtio-mmio blocks v2 devices | Patch `virtio_mmio.c` VERSION_1 check |
 | Canvas pixels black except text | `View.draw()` text color defaults to black | Set background color in Activity or use RECT fallback path |
+
+## Real OHOS Integration (replacing file-based workarounds)
+
+The current demo uses file-based IPC (touch_input.txt, canvas_pixels.raw) as
+scaffolding. The production architecture uses OHOS native APIs directly:
+
+### Architecture
+
+```
+OHOS input_service → multimodal_input → XComponent touch callback
+    → JNI → View.dispatchTouchEvent() → onClick/onScroll
+    → View.invalidate() → Choreographer vsync
+    → View.draw(canvas) → OH_Drawing → Skia → NativeWindow buffer
+    → render_service compositor → display
+```
+
+### Components
+
+| Component | Workaround | Real Integration |
+|-----------|-----------|-----------------|
+| Touch input | File polling (20Hz) | XComponent input callback (direct) |
+| Pixel output | canvas_pixels.raw → fb0 blit | NativeWindow buffer queue (zero-copy) |
+| Compositing | Manual mmap fb0 | render_service (already running) |
+| Frame timing | Sleep loop | Choreographer + OH vsync callback |
+| Drawing | stb_truetype software | lib2d_graphics.z.so (Skia) |
+
+### OHOS APIs Used
+
+- `OH_NativeXComponent_RegisterCallback()` — touch/key input callbacks
+- `OH_NativeWindow_NativeWindowRequestBuffer()` — dequeue drawing buffer
+- `OH_NativeWindow_NativeWindowFlushBuffer()` — submit frame to compositor
+- `OH_Drawing_Canvas*` — Skia-based 2D drawing (via lib2d_graphics.z.so)
+- `OH_DisplayManager_GetDefaultDisplayDensity()` — screen metrics
+
+### Files
+
+- `dalvik-port/compat/oh_drawing_bridge.c` — real OH_Drawing JNI (68 methods, dlopen)
+- `scripts/ohos_vnc_bridge.c` — transitional bridge (file IPC, to be replaced)
+- `scripts/AppRunner.java` — Dalvik event loop (touch poll → dispatch → re-render)
