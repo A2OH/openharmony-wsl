@@ -145,27 +145,32 @@ public class AppRunner {
 
     static void processTouchFile(File f) {
         try {
-            BufferedReader br = new BufferedReader(new FileReader(f));
-            String line;
-            while ((line = br.readLine()) != null) {
-                line = line.trim();
-                if (line.startsWith("DOWN ") || line.startsWith("UP ") || line.startsWith("MOVE ")) {
-                    String[] parts = line.split(" ");
-                    if (parts.length >= 3) {
-                        int action;
-                        if ("DOWN".equals(parts[0])) action = MotionEvent.ACTION_DOWN;
-                        else if ("UP".equals(parts[0])) action = MotionEvent.ACTION_UP;
-                        else action = MotionEvent.ACTION_MOVE;
+            /* Read file without BufferedReader (avoid class loading issues) */
+            FileInputStream fis = new FileInputStream(f);
+            byte[] buf = new byte[256];
+            int n = fis.read(buf);
+            fis.close();
+            if (n <= 0) return;
+            String content = new String(buf, 0, n);
+            String[] lines = content.split("\n");
+            for (int li = 0; li < lines.length; li++) {
+                String line = lines[li].trim();
+                if (line.length() < 5) continue;
+                int action = -1;
+                int off = 0;
+                if (line.startsWith("DOWN ")) { action = 0; off = 5; }     /* ACTION_DOWN=0 */
+                else if (line.startsWith("UP ")) { action = 1; off = 3; }  /* ACTION_UP=1 */
+                else if (line.startsWith("MOVE ")) { action = 2; off = 5; } /* ACTION_MOVE=2 */
+                if (action < 0) continue;
 
-                        float x = Float.parseFloat(parts[1]);
-                        float y = Float.parseFloat(parts[2]);
-
-                        dispatchTouch(action, x, y);
-                    }
-                }
+                String rest = line.substring(off);
+                int sp = rest.indexOf(' ');
+                if (sp < 0) continue;
+                float x = Float.parseFloat(rest.substring(0, sp));
+                float y = Float.parseFloat(rest.substring(sp + 1).trim());
+                dispatchTouch(action, x, y);
             }
-            br.close();
-            /* Clear the file after processing */
+            /* Clear file */
             new FileOutputStream(f).close();
         } catch (Throwable t) {
             out("TOUCH_ERROR: " + t.getClass().getName());
@@ -174,12 +179,35 @@ public class AppRunner {
 
     static void dispatchTouch(int action, float x, float y) {
         try {
-            MotionEvent ev = MotionEvent.obtain(action, x, y, System.currentTimeMillis());
-            rootView.dispatchTouchEvent(ev);
-            out("TOUCH: action=" + action + " x=" + (int)x + " y=" + (int)y);
+            /* Find the view at (x,y) and call performClick */
+            View target = findViewAt(rootView, (int)x, (int)y);
+            if (target != null && action == MotionEvent.ACTION_UP) {
+                target.performClick();
+                out("CLICK: " + target.getClass().getSimpleName() + " at " + (int)x + "," + (int)y);
+            } else {
+                out("TOUCH: action=" + action + " x=" + (int)x + " y=" + (int)y +
+                    " target=" + (target != null ? target.getClass().getSimpleName() : "none"));
+            }
         } catch (Throwable t) {
             out("DISPATCH_ERROR: " + t.getClass().getName() + " " + t.getMessage());
         }
+    }
+
+    static View findViewAt(View root, int x, int y) {
+        if (root instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) root;
+            /* Iterate in reverse (top-most child first) */
+            for (int i = vg.getChildCount() - 1; i >= 0; i--) {
+                View child = vg.getChildAt(i);
+                int cl = child.getLeft(), ct = child.getTop();
+                int cr = cl + child.getWidth(), cb = ct + child.getHeight();
+                if (x >= cl && x < cr && y >= ct && y < cb) {
+                    View found = findViewAt(child, x - cl, y - ct);
+                    if (found != null) return found;
+                }
+            }
+        }
+        return root;
     }
 
     static void dumpRects() {
