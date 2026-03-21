@@ -85,14 +85,17 @@ public class CanvasViewDumper {
             out("THEME_ERROR: " + t.getClass().getName());
         }
 
-        /* Measure and layout at screen size — ScrollView clips naturally */
+        /* Measure with unlimited height to get full content */
         try {
             int wSpec = View.MeasureSpec.makeMeasureSpec(screenW, View.MeasureSpec.EXACTLY);
-            int hSpec = View.MeasureSpec.makeMeasureSpec(screenH, View.MeasureSpec.EXACTLY);
-            out("MEASURE_START");
+            int hSpec = View.MeasureSpec.makeMeasureSpec(4000, View.MeasureSpec.AT_MOST);
             root.measure(wSpec, hSpec);
-            out("MEASURE_DONE");
+            int contentH = root.getMeasuredHeight();
+            if (contentH > screenH) screenH = contentH;
+            out("CONTENT_HEIGHT " + contentH);
             root.layout(0, 0, screenW, screenH);
+            out("MEASURE_START");
+            out("MEASURE_DONE");
             out("LAYOUT_DONE");
         } catch (Throwable t) {
             out("ERROR_MEASURE: " + t.getClass().getName() + " " + t.getMessage());
@@ -141,6 +144,81 @@ public class CanvasViewDumper {
                 }
                 fos.close();
                 out("CANVAS_PIXELS_WRITTEN");
+
+                /* Blit to /dev/fb0 if available (full OHOS with DRM) */
+                try {
+                    java.io.File fb = new java.io.File("/dev/fb0");
+                    if (fb.exists()) {
+                        int fbW = 1280, fbH = 800; /* VNC framebuffer size */
+                        FileOutputStream fbos = new FileOutputStream("/dev/fb0");
+                        int scrollY = 0;
+                        int maxScroll = (bh > fbH) ? (bh - fbH) : 0;
+                        /* Write visible viewport */
+                        byte[] fbBuf = new byte[fbW * 4];
+                        for (int y = 0; y < fbH; y++) {
+                            int sy = y + scrollY;
+                            if (sy < bh) {
+                                for (int x = 0; x < fbW && x < bw; x++) {
+                                    int px = com.ohos.shim.bridge.OHBridge.bitmapGetPixel(bmpHandle, x, sy);
+                                    int off = x * 4;
+                                    fbBuf[off]   = (byte)(px & 0xFF);
+                                    fbBuf[off+1] = (byte)((px>>8) & 0xFF);
+                                    fbBuf[off+2] = (byte)((px>>16) & 0xFF);
+                                    fbBuf[off+3] = (byte)((px>>24) & 0xFF);
+                                }
+                            }
+                            fbos.write(fbBuf, 0, fbW * 4);
+                        }
+                        fbos.close();
+                        out("FB0_BLIT_DONE " + fbW + "x" + fbH);
+
+                        /* Input scroll loop — read mouse wheel events */
+                        java.io.FileInputStream fis = null;
+                        for (int i = 0; i < 10; i++) {
+                            try {
+                                fis = new java.io.FileInputStream("/dev/input/event" + i);
+                                break;
+                            } catch (Throwable ignore) {}
+                        }
+                        if (fis != null) {
+                            out("INPUT_LOOP_START");
+                            byte[] evBuf = new byte[16]; /* struct input_event: sec(4) + usec(4) + type(2) + code(2) + value(4) */
+                            while (true) {
+                                if (fis.read(evBuf) == 16) {
+                                    int evType = (evBuf[8] & 0xFF) | ((evBuf[9] & 0xFF) << 8);
+                                    int evCode = (evBuf[10] & 0xFF) | ((evBuf[11] & 0xFF) << 8);
+                                    int evValue = (evBuf[12] & 0xFF) | ((evBuf[13] & 0xFF) << 8) |
+                                                  ((evBuf[14] & 0xFF) << 16) | ((evBuf[15] & 0xFF) << 24);
+                                    /* EV_REL=2, REL_WHEEL=8 */
+                                    if (evType == 2 && evCode == 8) {
+                                        scrollY -= evValue * 60;
+                                        if (scrollY < 0) scrollY = 0;
+                                        if (scrollY > maxScroll) scrollY = maxScroll;
+                                        /* Re-blit at new scroll position */
+                                        java.io.RandomAccessFile raf = new java.io.RandomAccessFile("/dev/fb0", "rw");
+                                        for (int fy = 0; fy < fbH; fy++) {
+                                            int sy2 = fy + scrollY;
+                                            if (sy2 < bh) {
+                                                for (int x = 0; x < fbW && x < bw; x++) {
+                                                    int px = com.ohos.shim.bridge.OHBridge.bitmapGetPixel(bmpHandle, x, sy2);
+                                                    int off = x * 4;
+                                                    fbBuf[off]   = (byte)(px & 0xFF);
+                                                    fbBuf[off+1] = (byte)((px>>8) & 0xFF);
+                                                    fbBuf[off+2] = (byte)((px>>16) & 0xFF);
+                                                    fbBuf[off+3] = (byte)((px>>24) & 0xFF);
+                                                }
+                                            }
+                                            raf.write(fbBuf, 0, fbW * 4);
+                                        }
+                                        raf.close();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (Throwable t) {
+                    out("FB0_ERROR: " + t.getClass().getName() + " " + t.getMessage());
+                }
             }
         } catch (Throwable t) {
             out("CANVAS_ERROR: " + t.getClass().getName() + " " + t.getMessage());
