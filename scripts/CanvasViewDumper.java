@@ -77,7 +77,15 @@ public class CanvasViewDumper {
 
         int screenW = 1280, screenH = 800;
 
-        /* Measure and layout */
+        /* Apply default theme (widget backgrounds, colors) */
+        try {
+            android.app.DefaultTheme.applyToViewTree(root);
+            out("THEME_APPLIED");
+        } catch (Throwable t) {
+            out("THEME_ERROR: " + t.getClass().getName());
+        }
+
+        /* Measure and layout at screen size — ScrollView clips naturally */
         try {
             int wSpec = View.MeasureSpec.makeMeasureSpec(screenW, View.MeasureSpec.EXACTLY);
             int hSpec = View.MeasureSpec.makeMeasureSpec(screenH, View.MeasureSpec.EXACTLY);
@@ -95,11 +103,45 @@ public class CanvasViewDumper {
             out("CANVAS_DRAW_START");
             Bitmap bitmap = Bitmap.createBitmap(screenW, screenH, Bitmap.Config.ARGB_8888);
             Canvas canvas = new Canvas(bitmap);
+            /* Fill with dark background before View.draw — Views have transparent bg by default */
+            canvas.drawColor(0xFFF5F5F5);
             root.draw(canvas);
             out("CANVAS_DRAW_DONE");
-            /* Explicitly destroy canvas to flush pixels to /data/a2oh/canvas_pixels.raw */
-            com.ohos.shim.bridge.OHBridge.canvasDestroy(canvas.getNativeHandle());
-            out("CANVAS_FLUSHED");
+
+            /* Write pixels from Java (C-side open() broken on this platform) */
+            long bmpHandle = bitmap.getNativeHandle();
+            int bw = com.ohos.shim.bridge.OHBridge.bitmapGetWidth(bmpHandle);
+            int bh = com.ohos.shim.bridge.OHBridge.bitmapGetHeight(bmpHandle);
+            out("CANVAS_WRITE " + bw + "x" + bh);
+            if (bw > 0 && bh > 0) {
+                FileOutputStream fos = new FileOutputStream("/data/a2oh/canvas_pixels.raw");
+                /* Header */
+                byte[] hdr = new byte[8];
+                hdr[0]=(byte)(bw&0xFF); hdr[1]=(byte)((bw>>8)&0xFF);
+                hdr[2]=(byte)((bw>>16)&0xFF); hdr[3]=(byte)((bw>>24)&0xFF);
+                hdr[4]=(byte)(bh&0xFF); hdr[5]=(byte)((bh>>8)&0xFF);
+                hdr[6]=(byte)((bh>>16)&0xFF); hdr[7]=(byte)((bh>>24)&0xFF);
+                fos.write(hdr);
+                /* Write 8 rows at a time to reduce JNI call overhead */
+                int BATCH = 8;
+                byte[] buf = new byte[bw * 4 * BATCH];
+                for (int y = 0; y < bh; y += BATCH) {
+                    int rows = (y + BATCH <= bh) ? BATCH : (bh - y);
+                    for (int r = 0; r < rows; r++) {
+                        for (int x = 0; x < bw; x++) {
+                            int px = com.ohos.shim.bridge.OHBridge.bitmapGetPixel(bmpHandle, x, y + r);
+                            int off = (r * bw + x) * 4;
+                            buf[off]   = (byte)(px & 0xFF);
+                            buf[off+1] = (byte)((px>>8) & 0xFF);
+                            buf[off+2] = (byte)((px>>16) & 0xFF);
+                            buf[off+3] = (byte)((px>>24) & 0xFF);
+                        }
+                    }
+                    fos.write(buf, 0, rows * bw * 4);
+                }
+                fos.close();
+                out("CANVAS_PIXELS_WRITTEN");
+            }
         } catch (Throwable t) {
             out("CANVAS_ERROR: " + t.getClass().getName() + " " + t.getMessage());
         }
@@ -127,7 +169,7 @@ public class CanvasViewDumper {
         if (v instanceof Button) bgColor = 0xFF4CAF50;
         else if (v instanceof TextView) bgColor = 0xFF212121;
         else if (v instanceof ListView) bgColor = 0xFF303030;
-        else if (v instanceof LinearLayout) bgColor = 0xFF1A1A2E;
+        else if (v instanceof LinearLayout) bgColor = 0xFFF5F5F5;
 
         String text = "";
         if (v instanceof TextView) {

@@ -158,7 +158,7 @@ int main() {
               "-Xverify:none", "-Xdexopt:none",
               "-Xbootclasspath:/data/a2oh/core.jar:/data/a2oh/viewdumper.dex",
               "-classpath", "/data/a2oh/viewdumper.dex",
-              "ViewDumper", NULL);
+              "CanvasViewDumper", "com.example.showcase.ShowcaseActivity", NULL);
         _exit(127);
     }
 
@@ -195,6 +195,24 @@ int main() {
     snprintf(lenbuf, sizeof(lenbuf), "Output: %d bytes\n", total);
     msg(lenbuf);
 
+    /* Check for canvas pixel output from software renderer */
+    int has_canvas = 0;
+    {
+        int cpfd = open("/data/a2oh/canvas_pixels.raw", O_RDONLY);
+        if (cpfd >= 0) {
+            int cw = 0, ch = 0;
+            read(cpfd, &cw, 4);
+            read(cpfd, &ch, 4);
+            if (cw > 0 && ch > 0 && cw <= 4096 && ch <= 4096) {
+                has_canvas = 1;
+                char cbuf[64];
+                snprintf(cbuf, sizeof(cbuf), "Canvas output: %dx%d\n", cw, ch);
+                msg(cbuf);
+            }
+            close(cpfd);
+        }
+    }
+
     /* Open framebuffer */
     int fb = open("/dev/fb0", O_RDWR);
     if (fb < 0) { msg("No fb0\n"); msg(output); while(1) sleep(3600); }
@@ -207,6 +225,39 @@ int main() {
     uint32_t *px = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_SHARED, fb, 0);
     if (px == MAP_FAILED) { msg("mmap fail\n"); while(1) sleep(3600); }
     int stride = fi.line_length / 4;
+
+    /* If canvas pixels available, blit directly */
+    if (has_canvas) {
+        int cpfd = open("/data/a2oh/canvas_pixels.raw", O_RDONLY);
+        if (cpfd >= 0) {
+            int cw = 0, ch = 0;
+            read(cpfd, &cw, 4);
+            read(cpfd, &ch, 4);
+            if (cw > 0 && ch > 0) {
+                uint32_t *cpx = (uint32_t*)malloc(cw * ch * 4);
+                if (cpx) {
+                    read(cpfd, cpx, cw * ch * 4);
+                    /* Blit canvas to framebuffer — 1:1, clip at screen edge */
+                    for (int y = 0; y < ch && y < H; y++)
+                        for (int x = 0; x < cw && x < W; x++)
+                            px[y * stride + x] = cpx[y * cw + x];
+                    free(cpx);
+                    msg("Canvas pixels blitted to fb0!\n");
+                    /* Add footer */
+                    fill(px, stride, W, H, 0, H - 30, W, 30, 0xFF0D1117);
+                    char footer[128];
+                    snprintf(footer, sizeof(footer), "Canvas render %dx%d | Software OH_Drawing | ARM32 QEMU VNC", cw, ch);
+                    draw_text(px, stride, W, H, 12, H - 24, footer, 14.0f, 0xFF888888);
+                    /* Skip RECT parsing */
+                    munmap(px, sz); close(fb); close(cpfd);
+                    msg("Done!\n");
+                    while(1) sleep(3600);
+                }
+            }
+            close(cpfd);
+        }
+        msg("Canvas blit failed, falling back to RECT\n");
+    }
 
     /* Clear to dark background */
     for (int i = 0; i < H * stride; i++) px[i] = 0xFF1A1A2E;
