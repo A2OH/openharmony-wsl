@@ -171,14 +171,26 @@ public class CanvasViewDumper {
                                         android.view.MotionEvent.obtain(0, 0, action, touchX, touchY, 0);
                                     out("TOUCH " + action + " at " + touchX + "," + touchY);
                                     try {
-                                        root.dispatchTouchEvent(me);
+                                        boolean handled = root.dispatchTouchEvent(me);
+                                        out("TOUCH_HANDLED=" + handled);
                                     } catch (Throwable te) {
                                         out("TOUCH_ERR: " + te.getClass().getName());
                                     }
                                     me.recycle();
 
-                                    /* Re-render after touch (view state may have changed) */
-                                    if (evValue == 0) { /* on UP */
+                                    /* On UP: find and click view at touch position */
+                                    if (evValue == 0) {
+                                        try {
+                                            View target = findViewAt(root, touchX, touchY);
+                                            if (target != null) {
+                                                out("CLICK: " + target.getClass().getSimpleName() + " at " + touchX + "," + touchY);
+                                                target.performClick();
+                                            } else {
+                                                out("NO_TARGET at " + touchX + "," + touchY);
+                                            }
+                                        } catch (Throwable t) {
+                                            out("CLICK_ERR: " + t.getMessage());
+                                        }
                                         dirty = true;
                                     }
                                 }
@@ -222,6 +234,29 @@ public class CanvasViewDumper {
         } catch (Throwable t) {
             out("DUMP_ERROR: " + t.getClass().getName());
         }
+    }
+
+    static View findViewAt(View v, int x, int y) {
+        if (v instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) v;
+            for (int i = vg.getChildCount() - 1; i >= 0; i--) {
+                View child = vg.getChildAt(i);
+                int cx = x - v.getLeft() + v.getScrollX();
+                int cy = y - v.getTop() + v.getScrollY();
+                if (cx >= child.getLeft() && cx < child.getRight() &&
+                    cy >= child.getTop() && cy < child.getBottom()) {
+                    View found = findViewAt(child, cx, cy);
+                    if (found != null) return found;
+                }
+            }
+        }
+        /* Match clickable views OR known interactive widget types */
+        if (v.isClickable() || v instanceof Button || v instanceof android.widget.CompoundButton
+            || v instanceof android.widget.Switch || v instanceof android.widget.ToggleButton
+            || v instanceof android.widget.SeekBar || v instanceof android.widget.RatingBar) {
+            return v;
+        }
+        return null;
     }
 
     static void dumpView(View v, int offsetX, int offsetY) {
