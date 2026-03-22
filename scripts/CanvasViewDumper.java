@@ -111,107 +111,46 @@ public class CanvasViewDumper {
             root.draw(canvas);
             out("CANVAS_DRAW_DONE");
 
-            /* Write pixels from Java (C-side open() broken on this platform) */
+            /* Bulk write pixels + fb0 blit via native C (no per-pixel JNI) */
             long bmpHandle = bitmap.getNativeHandle();
             int bw = com.ohos.shim.bridge.OHBridge.bitmapGetWidth(bmpHandle);
             int bh = com.ohos.shim.bridge.OHBridge.bitmapGetHeight(bmpHandle);
             out("CANVAS_WRITE " + bw + "x" + bh);
             if (bw > 0 && bh > 0) {
-                FileOutputStream fos = new FileOutputStream("/data/a2oh/canvas_pixels.raw");
-                /* Header */
-                byte[] hdr = new byte[8];
-                hdr[0]=(byte)(bw&0xFF); hdr[1]=(byte)((bw>>8)&0xFF);
-                hdr[2]=(byte)((bw>>16)&0xFF); hdr[3]=(byte)((bw>>24)&0xFF);
-                hdr[4]=(byte)(bh&0xFF); hdr[5]=(byte)((bh>>8)&0xFF);
-                hdr[6]=(byte)((bh>>16)&0xFF); hdr[7]=(byte)((bh>>24)&0xFF);
-                fos.write(hdr);
-                /* Write 8 rows at a time to reduce JNI call overhead */
-                int BATCH = 8;
-                byte[] buf = new byte[bw * 4 * BATCH];
-                for (int y = 0; y < bh; y += BATCH) {
-                    int rows = (y + BATCH <= bh) ? BATCH : (bh - y);
-                    for (int r = 0; r < rows; r++) {
-                        for (int x = 0; x < bw; x++) {
-                            int px = com.ohos.shim.bridge.OHBridge.bitmapGetPixel(bmpHandle, x, y + r);
-                            int off = (r * bw + x) * 4;
-                            buf[off]   = (byte)(px & 0xFF);
-                            buf[off+1] = (byte)((px>>8) & 0xFF);
-                            buf[off+2] = (byte)((px>>16) & 0xFF);
-                            buf[off+3] = (byte)((px>>24) & 0xFF);
-                        }
-                    }
-                    fos.write(buf, 0, rows * bw * 4);
-                }
-                fos.close();
-                out("CANVAS_PIXELS_WRITTEN");
+                /* Single JNI call writes entire pixel buffer to file */
+                int wrote = com.ohos.shim.bridge.OHBridge.bitmapWriteToFile(bmpHandle, "/data/a2oh/canvas_pixels.raw");
+                out("CANVAS_PIXELS_WRITTEN " + wrote);
 
-                /* Blit to /dev/fb0 if available (full OHOS with DRM) */
+                /* Single JNI call blits to /dev/fb0 via mmap */
+                int blitted = com.ohos.shim.bridge.OHBridge.bitmapBlitToFb0(bmpHandle, 0);
+                out("FB0_BLIT_DONE " + blitted);
+
+                /* Input scroll loop — read mouse wheel, re-blit via C */
                 try {
-                    java.io.File fb = new java.io.File("/dev/fb0");
-                    if (fb.exists()) {
-                        int fbW = 1280, fbH = 800; /* VNC framebuffer size */
-                        FileOutputStream fbos = new FileOutputStream("/dev/fb0");
-                        int scrollY = 0;
-                        int maxScroll = (bh > fbH) ? (bh - fbH) : 0;
-                        /* Write visible viewport */
-                        byte[] fbBuf = new byte[fbW * 4];
-                        for (int y = 0; y < fbH; y++) {
-                            int sy = y + scrollY;
-                            if (sy < bh) {
-                                for (int x = 0; x < fbW && x < bw; x++) {
-                                    int px = com.ohos.shim.bridge.OHBridge.bitmapGetPixel(bmpHandle, x, sy);
-                                    int off = x * 4;
-                                    fbBuf[off]   = (byte)(px & 0xFF);
-                                    fbBuf[off+1] = (byte)((px>>8) & 0xFF);
-                                    fbBuf[off+2] = (byte)((px>>16) & 0xFF);
-                                    fbBuf[off+3] = (byte)((px>>24) & 0xFF);
-                                }
-                            }
-                            fbos.write(fbBuf, 0, fbW * 4);
-                        }
-                        fbos.close();
-                        out("FB0_BLIT_DONE " + fbW + "x" + fbH);
-
-                        /* Input scroll loop — read mouse wheel events */
-                        java.io.FileInputStream fis = null;
-                        for (int i = 0; i < 10; i++) {
-                            try {
-                                fis = new java.io.FileInputStream("/dev/input/event" + i);
-                                break;
-                            } catch (Throwable ignore) {}
-                        }
-                        if (fis != null) {
-                            out("INPUT_LOOP_START");
-                            byte[] evBuf = new byte[16]; /* struct input_event: sec(4) + usec(4) + type(2) + code(2) + value(4) */
-                            while (true) {
-                                if (fis.read(evBuf) == 16) {
-                                    int evType = (evBuf[8] & 0xFF) | ((evBuf[9] & 0xFF) << 8);
-                                    int evCode = (evBuf[10] & 0xFF) | ((evBuf[11] & 0xFF) << 8);
-                                    int evValue = (evBuf[12] & 0xFF) | ((evBuf[13] & 0xFF) << 8) |
-                                                  ((evBuf[14] & 0xFF) << 16) | ((evBuf[15] & 0xFF) << 24);
-                                    /* EV_REL=2, REL_WHEEL=8 */
-                                    if (evType == 2 && evCode == 8) {
-                                        scrollY -= evValue * 60;
-                                        if (scrollY < 0) scrollY = 0;
-                                        if (scrollY > maxScroll) scrollY = maxScroll;
-                                        /* Re-blit at new scroll position */
-                                        java.io.RandomAccessFile raf = new java.io.RandomAccessFile("/dev/fb0", "rw");
-                                        for (int fy = 0; fy < fbH; fy++) {
-                                            int sy2 = fy + scrollY;
-                                            if (sy2 < bh) {
-                                                for (int x = 0; x < fbW && x < bw; x++) {
-                                                    int px = com.ohos.shim.bridge.OHBridge.bitmapGetPixel(bmpHandle, x, sy2);
-                                                    int off = x * 4;
-                                                    fbBuf[off]   = (byte)(px & 0xFF);
-                                                    fbBuf[off+1] = (byte)((px>>8) & 0xFF);
-                                                    fbBuf[off+2] = (byte)((px>>16) & 0xFF);
-                                                    fbBuf[off+3] = (byte)((px>>24) & 0xFF);
-                                                }
-                                            }
-                                            raf.write(fbBuf, 0, fbW * 4);
-                                        }
-                                        raf.close();
-                                    }
+                    java.io.FileInputStream fis = null;
+                    for (int i = 0; i < 10; i++) {
+                        try {
+                            fis = new java.io.FileInputStream("/dev/input/event" + i);
+                            break;
+                        } catch (Throwable ignore) {}
+                    }
+                    int scrollY = 0;
+                    int maxScroll = (bh > 800) ? (bh - 800) : 0;
+                    if (fis != null) {
+                        out("INPUT_LOOP_START");
+                        byte[] evBuf = new byte[16];
+                        while (true) {
+                            if (fis.read(evBuf) == 16) {
+                                int evType = (evBuf[8] & 0xFF) | ((evBuf[9] & 0xFF) << 8);
+                                int evCode = (evBuf[10] & 0xFF) | ((evBuf[11] & 0xFF) << 8);
+                                int evValue = (evBuf[12] & 0xFF) | ((evBuf[13] & 0xFF) << 8) |
+                                              ((evBuf[14] & 0xFF) << 16) | ((evBuf[15] & 0xFF) << 24);
+                                if (evType == 2 && evCode == 8) {
+                                    scrollY -= evValue * 60;
+                                    if (scrollY < 0) scrollY = 0;
+                                    if (scrollY > maxScroll) scrollY = maxScroll;
+                                    /* Single JNI call re-blits at new scroll offset */
+                                    com.ohos.shim.bridge.OHBridge.bitmapBlitToFb0(bmpHandle, scrollY);
                                 }
                             }
                         }
