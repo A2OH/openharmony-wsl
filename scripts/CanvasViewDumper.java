@@ -125,7 +125,7 @@ public class CanvasViewDumper {
                 int blitted = com.ohos.shim.bridge.OHBridge.bitmapBlitToFb0(bmpHandle, 0);
                 out("FB0_BLIT_DONE " + blitted);
 
-                /* Input scroll loop — read mouse wheel, re-blit via C */
+                /* Input loop — scroll + touch dispatch */
                 try {
                     java.io.FileInputStream fis = null;
                     for (int i = 0; i < 10; i++) {
@@ -136,6 +136,8 @@ public class CanvasViewDumper {
                     }
                     int scrollY = 0;
                     int maxScroll = (bh > 800) ? (bh - 800) : 0;
+                    int touchX = 0, touchY = 0;
+                    boolean dirty = false;
                     if (fis != null) {
                         out("INPUT_LOOP_START");
                         byte[] evBuf = new byte[16];
@@ -145,18 +147,67 @@ public class CanvasViewDumper {
                                 int evCode = (evBuf[10] & 0xFF) | ((evBuf[11] & 0xFF) << 8);
                                 int evValue = (evBuf[12] & 0xFF) | ((evBuf[13] & 0xFF) << 8) |
                                               ((evBuf[14] & 0xFF) << 16) | ((evBuf[15] & 0xFF) << 24);
+
+                                /* EV_REL=2, REL_WHEEL=8 — scroll */
                                 if (evType == 2 && evCode == 8) {
                                     scrollY -= evValue * 60;
                                     if (scrollY < 0) scrollY = 0;
                                     if (scrollY > maxScroll) scrollY = maxScroll;
-                                    /* Single JNI call re-blits at new scroll offset */
                                     com.ohos.shim.bridge.OHBridge.bitmapBlitToFb0(bmpHandle, scrollY);
+                                }
+
+                                /* EV_ABS=3 — absolute position (virtio-tablet) */
+                                if (evType == 3) {
+                                    if (evCode == 0) touchX = evValue * bw / 32768; /* ABS_X scaled to screen */
+                                    if (evCode == 1) touchY = evValue * 800 / 32768 + scrollY; /* ABS_Y + scroll */
+                                }
+
+                                /* EV_KEY=1, BTN_TOUCH=330 or BTN_LEFT=272 — click */
+                                if (evType == 1 && (evCode == 330 || evCode == 272)) {
+                                    int action = (evValue == 1) ?
+                                        android.view.MotionEvent.ACTION_DOWN :
+                                        android.view.MotionEvent.ACTION_UP;
+                                    android.view.MotionEvent me =
+                                        android.view.MotionEvent.obtain(0, 0, action, touchX, touchY, 0);
+                                    out("TOUCH " + action + " at " + touchX + "," + touchY);
+                                    try {
+                                        root.dispatchTouchEvent(me);
+                                    } catch (Throwable te) {
+                                        out("TOUCH_ERR: " + te.getClass().getName());
+                                    }
+                                    me.recycle();
+
+                                    /* Re-render after touch (view state may have changed) */
+                                    if (evValue == 0) { /* on UP */
+                                        dirty = true;
+                                    }
+                                }
+
+                                /* EV_SYN=0 — sync event, good time to re-render if dirty */
+                                if (evType == 0 && evCode == 0 && dirty) {
+                                    dirty = false;
+                                    /* Re-measure, re-layout, re-draw */
+                                    int wSpec = View.MeasureSpec.makeMeasureSpec(bw, View.MeasureSpec.EXACTLY);
+                                    int hSpec = View.MeasureSpec.makeMeasureSpec(4000, View.MeasureSpec.AT_MOST);
+                                    root.measure(wSpec, hSpec);
+                                    int newH = root.getMeasuredHeight();
+                                    root.layout(0, 0, bw, newH);
+                                    Bitmap newBmp = Bitmap.createBitmap(bw, newH, Bitmap.Config.ARGB_8888);
+                                    Canvas newCanvas = new Canvas(newBmp);
+                                    newCanvas.drawColor(0xFFF5F5F5);
+                                    root.draw(newCanvas);
+                                    /* Update bitmap handle + blit */
+                                    bmpHandle = newBmp.getNativeHandle();
+                                    bh = newH;
+                                    maxScroll = (bh > 800) ? (bh - 800) : 0;
+                                    com.ohos.shim.bridge.OHBridge.bitmapBlitToFb0(bmpHandle, scrollY);
+                                    out("RE-RENDER " + bw + "x" + newH);
                                 }
                             }
                         }
                     }
                 } catch (Throwable t) {
-                    out("FB0_ERROR: " + t.getClass().getName() + " " + t.getMessage());
+                    out("INPUT_ERROR: " + t.getClass().getName() + " " + t.getMessage());
                 }
             }
         } catch (Throwable t) {
